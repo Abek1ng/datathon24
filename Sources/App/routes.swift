@@ -1,6 +1,5 @@
 import Vapor
-import AppKit
-import Vision
+import Foundation
 
 struct FloorPlanAnalysis: Content {
     let totalArea: Double
@@ -16,29 +15,63 @@ func routes(_ app: Application) throws {
         
         let input = try req.content.decode(Input.self)
         
-        guard let image = NSImage(data: input.image),
-              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            throw Abort(.badRequest, reason: "Invalid image data")
-        }
-        
-        return req.eventLoop.future().flatMapThrowing { () -> FloorPlanAnalysis in
-            let request = VNRecognizeTextRequest()
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = false
-            request.customWords = ["м²", "m²", "кв.м", "кв. м"]
-            request.minimumTextHeight = 0.01
-            
-            try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
-            
-            guard let observations = request.results else {
-                throw Abort(.internalServerError, reason: "Failed to process image")
-            }
-            
-            let recognizedStrings = observations.compactMap { $0.topCandidates(1).first?.string }
-            return processRecognizedText(recognizedStrings)
+        return req.eventLoop.future().flatMapThrowing {
+            try processImage(input.image)
         }
     }
 }
+
+func processImage(_ imageData: Data) throws -> FloorPlanAnalysis {
+    #if os(macOS)
+    return try processMacImage(imageData)
+    #else
+    return try processLinuxImage(imageData)
+    #endif
+}
+
+#if os(macOS)
+import Vision
+
+func processMacImage(_ imageData: Data) throws -> FloorPlanAnalysis {
+    guard let cgImage = createCGImage(from: imageData) else {
+        throw Abort(.badRequest, reason: "Invalid image data")
+    }
+    
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = false
+    request.customWords = ["м²", "m²", "кв.м", "кв. м"]
+    request.minimumTextHeight = 0.01
+    
+    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+    try handler.perform([request])
+    
+    guard let observations = request.results as? [VNRecognizedTextObservation] else {
+        throw Abort(.internalServerError, reason: "Failed to process image")
+    }
+    
+    let recognizedStrings = observations.compactMap { $0.topCandidates(1).first?.string }
+    return processRecognizedText(recognizedStrings)
+}
+
+func createCGImage(from imageData: Data) -> CGImage? {
+    guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+          let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        return nil
+    }
+    return cgImage
+}
+
+#else
+func processLinuxImage(_ imageData: Data) throws -> FloorPlanAnalysis {
+    // Placeholder for Linux image processing
+    // You would need to implement an alternative image processing method here
+    // For example, you could use a third-party OCR library or a cloud-based OCR service
+    
+    // For now, we'll just return a dummy result
+    return FloorPlanAnalysis(totalArea: 0, roomCount: 0, debugText: "Linux image processing not implemented")
+}
+#endif
 
 func processRecognizedText(_ strings: [String]) -> FloorPlanAnalysis {
     var numbers: [Double] = []
@@ -98,5 +131,3 @@ func extractNumber(from string: String) -> Double? {
     }
     return nil
 }
-
-
