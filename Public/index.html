@@ -1,0 +1,281 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room Detection - Datathon'24 Style</title>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      background-color: #0d0f13;
+      /* Dark background color for a tech feel */
+      margin: 0;
+      padding: 0;
+      color: white;
+    }
+
+    /* Navbar Styling */
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #0d0f13;
+      padding: 20px;
+      border-bottom: 1px solid #222;
+    }
+
+    .navbar img {
+      height: 60px;
+    }
+
+    /* Main Container */
+    .container {
+      width: 100%;
+      max-width: 800px;
+      margin: 50px auto;
+      text-align: center;
+      background-color: rgba(255, 255, 255, 0.05);
+      /* Transparent background */
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    }
+
+    h1 {
+      font-size: 30px;
+      font-weight: bold;
+      letter-spacing: 3px;
+      color: #fff;
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.9);
+    }
+
+    /* Form and Label Styling */
+    form {
+      margin-bottom: 20px;
+    }
+
+    label {
+      background-color: #007bff;
+      color: white;
+      padding: 12px 25px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 18px;
+      transition: background-color 0.3s ease;
+      display: inline-block;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+
+    label:hover {
+      background-color: #0056b3;
+    }
+
+    button {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      font-size: 18px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      text-transform: uppercase;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    /* Image Preview */
+    .image-preview {
+      margin-top: 20px;
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+    }
+
+    .image-preview img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+
+    /* Counter Section */
+    .counter {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    .counter strong {
+      color: #00d4ff;
+      text-shadow: 0 0 10px #00d4ff;
+    }
+
+    #imagePreview {
+      background: white;
+    }
+    
+    #labeled-image {
+      width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Navbar with Bigroup Logo on the Left and Hackathon Logo on the Right -->
+  <nav class="navbar">
+    <h1>Pushin' Code</h1>
+  </nav>
+
+  <!-- Main Container -->
+  <div class="container">
+    <h1>DATATHON'24 Room Detection</h1>
+
+    <!-- Form to Upload Image -->
+    <form id="uploadForm">
+      <input type="file" id="imageInput" accept="image/*" style="display: none" required />
+      <label for="imageInput">Choose Image</label>
+      <br /><br />
+      <button type="submit">Upload and Detect</button>
+    </form>
+
+    <!-- Image Preview -->
+    <div id="imagePreview" class="image-preview"></div>
+
+    <!-- Counter Section -->
+    <div class="counter">
+      <h2><strong>Total Living Room Count:</strong> <span id="totalCount">0</span></h2>
+      <h2><strong>Apartment Area:</strong> <span id="roomArea">0 m^2</span></h2>
+       <p><strong>Bathroom count:</strong> <span id="bathroomCount">0</span></p>
+    </div>
+    <img id="labeled-image" src="" alt="labeled image"/>
+  </div>
+
+  <script>
+    let livingRoomCounter = 0;
+    let studioCounter = 0;
+    let totalCount = 0;
+
+    // Handle image selection and preview before upload
+    document.getElementById("imageInput").addEventListener("change", function () {
+      const imageFile = document.getElementById("imageInput").files[0];
+      if (imageFile) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          // Display image preview
+          const imagePreviewDiv = document.getElementById("imagePreview");
+          imagePreviewDiv.innerHTML = `<img src="${e.target.result}" alt="Image Preview">`;
+        };
+        reader.readAsDataURL(imageFile);
+      }
+    });
+
+    // Handle form submission
+    document.getElementById("uploadForm").addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const imageFile = document.getElementById("imageInput").files[0];
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      if (!imageFile) {
+        alert("Please select an image first.");
+        return;
+      }
+
+      // Convert image to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(imageFile);
+      reader.onloadend = async function () {
+        const base64Image = reader.result.split(",")[1]; // Get base64 string
+
+        // Send the image to the API
+        try {
+          const response = await fetch(
+            "https://detect.roboflow.com/krisha.kz/8?api_key=UWgmeQrcizObC7lLO4Oi&format=image_and_json&labels=true",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: base64Image, // Properly wrap base64 image inside a JSON body
+            }
+          );
+
+          if (response.ok) {
+            const jsonResponse = await response.json();
+            handleResponse(jsonResponse);
+          } else {
+            console.error("Error with response:", response.status);
+          }
+          const response2 = await fetch('/analyze-floor-plan', {
+            method: 'POST',
+            body: formData,
+          });
+
+          // console.log(response2);
+          if (response2.ok) {
+            const jsonResponse = await response2.json();
+            document.getElementById("roomArea").innerHTML = jsonResponse.totalArea + " m^2";
+          }
+        } catch (error) {
+          console.error("Error during fetch:", error);
+        }
+      };
+    });
+
+    // Handle the response from the API
+    function handleResponse(response) {
+      const predictions = response.predictions;
+      console.log(predictions);
+      // Reset counts for new submission
+      totalCount = 0;
+      livingRoomCounter = 0;
+      studioCounter = 0;
+      bathroomCounter = 0;
+      let kitchenPresents = false
+      let studioPresents = false
+      predictions.forEach((prediction) => {
+          if(prediction.class === "kitchen"){
+              kitchenPresents = true
+          }
+          if(prediction.class === "studio"){
+              studioPresents = true
+          }
+          
+        if (prediction.class === "living_room") {
+          livingRoomCounter++;
+          totalCount++;
+        } else if (prediction.class === "bathroom"){
+            bathroomCounter++;
+        }
+      });
+      
+      if (!kitchenPresents){
+          if(studioPresents){
+              livingRoomCounter++;
+              totalCount++;
+          }else{
+              livingRoomCounter--;
+              totalCount--;
+          }
+      }
+      
+      
+      // Update the counters in the UI
+      document.getElementById("totalCount").textContent = totalCount;
+      document.getElementById("bathroomCount").textContent = bathroomCounter;
+      document.getElementById("labeled-image").src = "data:image/jpeg;base64,"+response.visualization
+    }
+  </script>
+</body>
+
+</html>

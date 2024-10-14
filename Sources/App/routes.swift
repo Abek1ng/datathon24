@@ -1,14 +1,36 @@
 import Vapor
 import Foundation
 
+
 struct FloorPlanAnalysis: Content {
     let totalArea: Double
     let roomCount: Int
     let debugText: String
 }
 
+public func configure(_ app: Application) throws {
+    // Existing configuration code...
+
+    // Configure CORS
+    let corsConfiguration = CORSMiddleware.Configuration(
+        allowedOrigin: .all,
+        allowedMethods: [.GET, .POST, .PUT, .OPTIONS, .DELETE, .PATCH],
+        allowedHeaders: [.accept, .authorization, .contentType, .origin, .xRequestedWith, .userAgent, .accessControlAllowOrigin]
+    )
+    let cors = CORSMiddleware(configuration: corsConfiguration)
+    app.middleware.use(cors, at: .beginning)
+
+    // Register routes
+    try routes(app)
+}
+
 func routes(_ app: Application) throws {
+    app.get { req in
+            return req.fileio.streamFile(at: app.directory.publicDirectory + "index.html")
+        }
+    
     app.post("analyze-floor-plan") { req -> EventLoopFuture<FloorPlanAnalysis> in
+        print("Received request to analyze-floor-plan")
         struct Input: Content {
             var image: Data
         }
@@ -46,7 +68,7 @@ func processMacImage(_ imageData: Data) throws -> FloorPlanAnalysis {
     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
     try handler.perform([request])
     
-    guard let observations = request.results as? [VNRecognizedTextObservation] else {
+    guard let observations = request.results else {
         throw Abort(.internalServerError, reason: "Failed to process image")
     }
     
@@ -64,11 +86,7 @@ func createCGImage(from imageData: Data) -> CGImage? {
 
 #else
 func processLinuxImage(_ imageData: Data) throws -> FloorPlanAnalysis {
-    // Placeholder for Linux image processing
-    // You would need to implement an alternative image processing method here
-    // For example, you could use a third-party OCR library or a cloud-based OCR service
-    
-    // For now, we'll just return a dummy result
+
     return FloorPlanAnalysis(totalArea: 0, roomCount: 0, debugText: "Linux image processing not implemented")
 }
 #endif
@@ -79,7 +97,7 @@ func processRecognizedText(_ strings: [String]) -> FloorPlanAnalysis {
 
     for string in strings {
         if let number = extractNumber(from: string) {
-            if number <= 500 {
+            if number <= 300 {
                 numbers.append(number)
                 debugText += "\(number)\n"
             }
